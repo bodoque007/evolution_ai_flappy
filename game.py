@@ -51,9 +51,13 @@ class Game:
     def update(self, dt):
         if self.game_over:
             return
+        
+        birds_to_remove = set()
+        pipes_to_remove = set()
+
+        nearest_pipe = self.get_next_pipe(next(iter(self.birds)).x, self.pipes)
             
-        for bird in self.birds[:]:  # Copy list to avoid modification during iteration
-            nearest_pipe = self.get_next_pipe(bird.x, self.pipes)
+        for bird in self.birds:
             if nearest_pipe:
                 inputs = [
                     bird.y,
@@ -66,16 +70,15 @@ class Game:
             
             # If bird hits either ground or ceiling, it's done for.
             if bird.y <= 0 or bird.y + bird.height >= self.height:
-                self.birds.remove(bird)
+                birds_to_remove.add(bird)
                 self.dead_birds.append(bird)
             
-        for pipe in self.pipes[:]:  # Copy list to avoid modification during iteration
+        for pipe in self.pipes:
             pipe.update(dt, self.pipe_speed)
             
-            for bird in self.birds[:]:  # Copy list to avoid modification during iteration
-                if pipe.check_collision(bird.get_rect()):
-                    self.birds.remove(bird)
-                    continue
+            for bird in self.birds:  # Copy list to avoid modification during iteration
+                if bird not in birds_to_remove and pipe.check_collision(bird.get_rect()):
+                    birds_to_remove.add(bird)
                     
                 # Check if pipe passed (for scoring)
                 if not pipe.passed and pipe.right < bird.x:
@@ -83,8 +86,15 @@ class Game:
                     self.score += 1
                 
             if pipe.is_off_screen():
-                self.pipes.remove(pipe)
+                pipes_to_remove.add(pipe)
+
         
+        if birds_to_remove:
+            self.birds = [bird for bird in self.birds if bird not in birds_to_remove]
+    
+        if pipes_to_remove:
+                self.pipes = [pipe for pipe in self.pipes if pipe not in pipes_to_remove]
+            
         # End game only if all birds are dead
         if len(self.birds) == 0:
             self.game_over = True
