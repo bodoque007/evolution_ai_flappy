@@ -37,7 +37,13 @@ class Bird:
 
     def decide(self, inputs):
         # inputs = [y, velocity_y, dist_to_next_pipe, gap_height_of_next_pipe]
-        x = np.array(inputs).reshape((1,4))
+        normalized_inputs = [
+            inputs[0] / 600.0,  # y position (0-1)
+            inputs[1] / 400.0,  # velocity_y (-1 to 1 roughly)
+            inputs[2] / 800.0,  # distance to pipe (0-1)
+            inputs[3] / 300.0   # gap difference (-1 to 1 roughly)
+        ]
+        x = np.array(normalized_inputs).reshape((1,4))
         decision = self.brain(x).numpy()[0][0]
         if decision > 0.5:
             self.flap()
@@ -54,7 +60,7 @@ def create_brain():
     return model
 
 
-def crossover(parent1_brain: Sequential, parent2_brain: Sequential, mutation_rate=0.1):
+def crossover(parent1_brain: Sequential, parent2_brain: Sequential, mutation_rate=0.4):
     parent1_weights = parent1_brain.get_weights()
     parent2_weights = parent2_brain.get_weights()
     child_weights = []
@@ -64,8 +70,9 @@ def crossover(parent1_brain: Sequential, parent2_brain: Sequential, mutation_rat
         child = np.where(mask, w1, w2)
 
         mutation_mask = np.random.rand(*child.shape) < mutation_rate
-        noise = np.random.randn(*child.shape) * random.uniform(-0.5, 0.5)
+        noise = np.random.randn(*child.shape) * 0.1
         child += (mutation_mask * noise)
+        child_weights.append(child)
     
     child_brain = create_brain()
     child_brain.set_weights(child_weights)

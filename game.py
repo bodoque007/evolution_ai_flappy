@@ -1,8 +1,9 @@
 import pygame
 import random
 import sys
-from bird import Bird
+from bird import Bird, crossover
 from pipe import Pipe
+import numpy as np
 
 
 class Game:
@@ -13,8 +14,9 @@ class Game:
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Flappy Bird ML")
         self.clock = pygame.time.Clock()
-        
-        self.birds = [ Bird(100, self.height // 2) for _ in range(25) ]
+        self.ai_frame_counter = 0
+        self.ai_decision_interval = 5
+        self.birds = set(Bird(100, self.height // 2) for _ in range(70))
         self.dead_birds = []
         self.pipes = []
         
@@ -57,46 +59,39 @@ class Game:
 
         nearest_pipe = self.get_next_pipe(next(iter(self.birds)).x, self.pipes)
             
+
         for bird in self.birds:
-            if nearest_pipe:
-                inputs = [
-                    bird.y,
-                    bird.velocity_y,
-                    nearest_pipe.x - bird.x,
-                    (nearest_pipe.gap_y - bird.y)
-                ]
+            if self.ai_frame_counter % self.ai_decision_interval == 0 and nearest_pipe:
+                inputs = [bird.y, bird.velocity_y, nearest_pipe.x - bird.x, (nearest_pipe.gap_y - bird.y)]
                 bird.decide(inputs)
-            bird.update(dt)
             
+            bird.update(dt) 
+
             # If bird hits either ground or ceiling, it's done for.
-            if bird.y <= 0 or bird.y + bird.height >= self.height:
+            if bird.y <= 0 or bird.y + bird.height >= self.height or nearest_pipe.check_collision(bird.get_rect()):
                 birds_to_remove.add(bird)
                 self.dead_birds.append(bird)
+        
+        self.ai_frame_counter += 1
+            
             
         for pipe in self.pipes:
             pipe.update(dt, self.pipe_speed)
-            
-            for bird in self.birds:  # Copy list to avoid modification during iteration
-                if bird not in birds_to_remove and pipe.check_collision(bird.get_rect()):
-                    birds_to_remove.add(bird)
-                    
-                # Check if pipe passed (for scoring)
-                if not pipe.passed and pipe.right < bird.x:
-                    pipe.passed = True
-                    self.score += 1
+
                 
             if pipe.is_off_screen():
                 pipes_to_remove.add(pipe)
 
         
         if birds_to_remove:
-            self.birds = [bird for bird in self.birds if bird not in birds_to_remove]
+            self.birds = set(bird for bird in self.birds if bird not in birds_to_remove)
     
         if pipes_to_remove:
-                self.pipes = [pipe for pipe in self.pipes if pipe not in pipes_to_remove]
+            self.pipes = [pipe for pipe in self.pipes if pipe not in pipes_to_remove]
             
         # End game only if all birds are dead
         if len(self.birds) == 0:
+            print(f"dead birds are {len(self.dead_birds)}")
             self.game_over = True
                 
         self.pipe_spawn_timer += dt
@@ -114,11 +109,17 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w and self.game_over:
+                    self.reset()
         return True
         
     def reset(self):
-        self.birds = [Bird(100, self.height // 2)]
+        self.birds = self.make_mutations(self.dead_birds[-5:], 70)
+        self.ai_frame_counter = 0
+        self.dead_birds = []
         self.pipes = []
+        self.pipes.append(Pipe(self.width - 50, self.height // 2))
         self.pipe_speed = 200
         self.pipe_spawn_timer = 0
         self.speed_increase_timer = 0
@@ -147,7 +148,7 @@ class Game:
         # TODO: Maybe fix, this is just so the bird already has a next_pipe during the first frame. Not so elegant at all.
         self.pipes.append(Pipe(self.width - 50, self.height // 2))
         while running:
-            dt = self.clock.tick(60) / 1000.0
+            dt = self.clock.tick(30) / 1000.0
             
             running = self.handle_input()
             self.update(dt)
@@ -155,3 +156,19 @@ class Game:
             
         pygame.quit()
         sys.exit()
+
+
+    def make_mutations(self, parents, population_size):
+        new_population = set()
+        
+        # Create weights that favor later parents (higher scores)
+        # Last parent gets highest weight, first gets lowest
+        weights = np.arange(1, len(parents) + 1)  # [1, 2, 3, 4, 5] for 5 parents
+        weights = weights / np.sum(weights)  # Normalize to probabilities
+        
+        while len(new_population) < population_size:
+            p1, p2 = np.random.choice(parents, 2, replace=True, p=weights)
+            child = crossover(p1.brain, p2.brain)
+            new_population.add(Bird(100, self.height // 2, brain=child))
+        
+        return new_population
