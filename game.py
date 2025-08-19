@@ -14,7 +14,7 @@ class Game:
         pygame.display.set_caption("Flappy Bird ML")
         self.clock = pygame.time.Clock()
         
-        self.birds = [ Bird(100, self.height // 2) for _ in range(10) ]
+        self.birds = [ Bird(100, self.height // 2) for _ in range(25) ]
         self.dead_birds = []
         self.pipes = []
         
@@ -99,19 +99,11 @@ class Game:
         if self.speed_increase_timer >= self.speed_increase_interval:
             self.pipe_speed *= self.speed_increase_factor
             self.speed_increase_timer = 0
-            print(f"Speed increased to: {self.pipe_speed:.1f}")
             
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE or event.key == pygame.K_w:
-                    if not self.game_over:
-                        if self.birds:
-                            self.birds[0].flap()
-                    else:
-                        self.reset()
         return True
         
     def reset(self):

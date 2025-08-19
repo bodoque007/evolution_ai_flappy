@@ -1,7 +1,14 @@
 import pygame
 import numpy as np
 from keras import Sequential, layers
-import random 
+import random
+import tensorflow as tf
+import os
+
+# Optimize TensorFlow for CPU performance
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '1'  # Enable Intel oneDNN optimizations
+tf.config.threading.set_inter_op_parallelism_threads(os.cpu_count())
+tf.config.threading.set_intra_op_parallelism_threads(os.cpu_count()) 
 
 class Bird:
     def __init__(self, x, y, brain=None):
@@ -41,19 +48,11 @@ def create_brain():
     model = Sequential([
         layers.Input(shape=(4,)),
         layers.Dense(8, activation="relu"),
+        layers.Dense(16, activation="relu"),
         layers.Dense(1, activation="sigmoid")
     ])
     return model
 
-def mutate_brain(brain: Sequential, rate=0.01): 
-    new_brain = create_brain()
-    weights = brain.get_weights()
-    new_weights = []
-    for w in weights:
-        noise = np.random.randn(*w.shape) * rate
-        new_weights.append(w + noise)
-    new_brain.set_weights(new_weights)
-    return new_brain
 
 def crossover(parent1_brain: Sequential, parent2_brain: Sequential, mutation_rate=0.1):
     parent1_weights = parent1_brain.get_weights()
