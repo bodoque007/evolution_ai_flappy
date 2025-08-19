@@ -14,7 +14,8 @@ class Game:
         pygame.display.set_caption("Flappy Bird ML")
         self.clock = pygame.time.Clock()
         
-        self.birds = [ Bird(100, self.height // 2) ]
+        self.birds = [ Bird(100, self.height // 2) for _ in range(10) ]
+        self.dead_birds = []
         self.pipes = []
         
         self.pipe_speed = 200  # pixels/second
@@ -51,7 +52,7 @@ class Game:
         if self.game_over:
             return
             
-        for bird in self.birds:
+        for bird in self.birds[:]:  # Copy list to avoid modification during iteration
             nearest_pipe = self.get_next_pipe(bird.x, self.pipes)
             if nearest_pipe:
                 inputs = [
@@ -65,14 +66,16 @@ class Game:
             
             # If bird hits either ground or ceiling, it's done for.
             if bird.y <= 0 or bird.y + bird.height >= self.height:
-                self.game_over = True
+                self.birds.remove(bird)
+                self.dead_birds.append(bird)
             
         for pipe in self.pipes[:]:  # Copy list to avoid modification during iteration
             pipe.update(dt, self.pipe_speed)
             
-            for bird in self.birds:
+            for bird in self.birds[:]:  # Copy list to avoid modification during iteration
                 if pipe.check_collision(bird.get_rect()):
-                    self.game_over = True
+                    self.birds.remove(bird)
+                    continue
                     
                 # Check if pipe passed (for scoring)
                 if not pipe.passed and pipe.right < bird.x:
@@ -81,6 +84,10 @@ class Game:
                 
             if pipe.is_off_screen():
                 self.pipes.remove(pipe)
+        
+        # End game only if all birds are dead
+        if len(self.birds) == 0:
+            self.game_over = True
                 
         self.pipe_spawn_timer += dt
         if self.pipe_spawn_timer >= self.pipe_spawn_interval:

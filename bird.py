@@ -1,8 +1,7 @@
 import pygame
 import numpy as np
-from tensorflow import keras
-from tensorflow.keras import layers
-
+from keras import Sequential, layers
+import random 
 
 class Bird:
     def __init__(self, x, y, brain=None):
@@ -14,6 +13,7 @@ class Bird:
         self.gravity = 800
         self.flap_strength = -300  # In pygame, y coordinate grows "downwards" thus the flap is negative, it pushes the bird upward
         self.brain = brain if brain is not None else create_brain()
+        
         
     def flap(self):
         self.velocity_y = self.flap_strength
@@ -35,11 +35,39 @@ class Bird:
         if decision > 0.5:
             self.flap()
 
+# TODO: Modularize the following functions.
 
 def create_brain():
-    model = keras.Sequential([
+    model = Sequential([
         layers.Input(shape=(4,)),
         layers.Dense(8, activation="relu"),
         layers.Dense(1, activation="sigmoid")
     ])
     return model
+
+def mutate_brain(brain: Sequential, rate=0.01): 
+    new_brain = create_brain()
+    weights = brain.get_weights()
+    new_weights = []
+    for w in weights:
+        noise = np.random.randn(*w.shape) * rate
+        new_weights.append(w + noise)
+    new_brain.set_weights(new_weights)
+    return new_brain
+
+def crossover(parent1_brain: Sequential, parent2_brain: Sequential, mutation_rate=0.1):
+    parent1_weights = parent1_brain.get_weights()
+    parent2_weights = parent2_brain.get_weights()
+    child_weights = []
+
+    for w1, w2 in zip(parent1_weights, parent2_weights):
+        mask = np.random.rand(*w1.shape) > 0.5
+        child = np.where(mask, w1, w2)
+
+        mutation_mask = np.random.rand(*child.shape) < mutation_rate
+        noise = np.random.randn(*child.shape) * random.uniform(-0.5, 0.5)
+        child += (mutation_mask * noise)
+    
+    child_brain = create_brain()
+    child_brain.set_weights(child_weights)
+    return child_brain
