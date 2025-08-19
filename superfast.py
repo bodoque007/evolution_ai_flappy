@@ -2,8 +2,6 @@ import numpy as np
 import pygame
 import random
 from typing import List, Tuple
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 
 class FastFlappySimulation:
     
@@ -12,7 +10,7 @@ class FastFlappySimulation:
         self.width = 800
         self.height = 600
         
-        # Bird states: [y_pos, y_velocity, fitness, alive]
+        # Vectorized bird states: [y_pos, y_velocity, fitness, alive]
         self.birds = np.zeros((population_size, 4))
         self.birds[:, 0] = self.height // 2  # Initial y position, we don't care about x position as it's constant
         self.birds[:, 3] = 1  # All alive initially
@@ -32,4 +30,3 @@ class FastFlappySimulation:
         
         self.time = 0
         self.generation = 1
-        
