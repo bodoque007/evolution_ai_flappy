@@ -1,7 +1,6 @@
 import numpy as np
 import pygame
 import random
-from typing import List, Tuple
 
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
@@ -30,10 +29,6 @@ class FastFlappySimulation:
         self.pipe_speed = 200
         self.pipe_width = 60
         self.pipe_gap_height = 150
-        # The two following lines mean that every 3 seconds, pipe speed increases by *1.1.
-        self.speed_increase_timer = 0
-        self.speed_increase_factor = 1.1 #
-        self.speed_increase_interval = 3.0 # Seconds
         
         # Neural networks for each bird (simplified)
         self.networks = self.create_population_networks()
@@ -129,7 +124,6 @@ class FastFlappySimulation:
             
             # Pipe collision
             bird_x = 100
-            bird_rect = [bird_x, bird_y, self.bird_width, self.bird_height]
             
             for pipe in self.pipes:
                 pipe_x, gap_y, gap_height, passed = pipe
@@ -149,12 +143,7 @@ class FastFlappySimulation:
         
         # Update pipes
         pipes_to_remove = []
-        self.speed_increase_timer += dt
         for i, pipe in enumerate(self.pipes):
-            if self.speed_increase_timer >= self.speed_increase_interval:
-                self.pipe_speed *= self.speed_increase_factor
-                self.speed_increase_timer = 0
-
             pipe[0] -= self.pipe_speed * dt  # Move pipe left
             if pipe[0] + self.pipe_width < 0:  # Off screen
                 pipes_to_remove.append(i)
@@ -273,10 +262,7 @@ class GameVisualizer:
         self.pipes = []
         self.pipe_speed = 200
         self.pipe_width = 60
-        self.speed_increase_timer = 0
-        # The two following lines mean that every 3 seconds, pipe speed increases by *1.1.
-        self.speed_increase_interval = 3.0  # seconds
-        self.speed_increase_factor = 1.1
+
         
         # Best network from training
         self.best_network = None
@@ -377,12 +363,6 @@ class GameVisualizer:
             if self.bird_y <= 0 or self.bird_y + 30 >= self.height:
                 print("Hit ground/ceiling in visualizer!")
                 running = False
-            
-            # Increase speed periodically after speed_increase_timer seconds
-            self.speed_increase_timer += dt
-            if self.speed_increase_timer >= self.speed_increase_interval:
-                self.pipe_speed *= self.speed_increase_factor
-                self.speed_increase_timer = 0
             
             pygame.display.flip()
         
