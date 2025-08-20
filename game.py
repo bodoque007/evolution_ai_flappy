@@ -27,7 +27,7 @@ class Game:
         self.speed_increase_timer = 0
         # The two following lines mean that every 3 seconds, pipe speed increases by *1.1.
         self.speed_increase_interval = 3.0  # seconds
-        self.speed_increase_factor = 1.1 #
+        self.speed_increase_factor = 1.1
         
         self.score = 0
         self.game_over = False
