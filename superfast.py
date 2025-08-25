@@ -2,33 +2,82 @@ import numpy as np
 import pygame
 import random
 
+# Color constants
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
 BLUE_SKY = (135, 206, 235)
 
+# Game constants
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+BIRD_WIDTH = 30
+BIRD_HEIGHT = 30
+BIRD_X_POSITION = 100
+
+# Physics constants
+GRAVITY = 800
+FLAP_STRENGTH = -300
+BIRD_INITIAL_Y = SCREEN_HEIGHT // 2
+
+# Pipe constants
+PIPE_WIDTH = 60
+PIPE_GAP_HEIGHT = 150
+PIPE_SPEED = 200
+PIPE_SPAWN_DISTANCE = 300
+PIPE_MIN_GAP_Y = 100
+PIPE_MAX_GAP_Y = SCREEN_HEIGHT - 250
+
+# Neural network constants
+NN_INPUT_SIZE = 4
+NN_HIDDEN1_SIZE = 8
+NN_HIDDEN2_SIZE = 16
+NN_OUTPUT_SIZE = 1
+
+# Evolution constants
+DEFAULT_POPULATION_SIZE = 2000
+ELITE_PERCENTAGE = 0.2  # Top 20% as parents
+ELITE_SURVIVORS = 10    # Best performers to keep unchangeable
+MUTATION_RATE = 0.1
+MUTATION_STRENGTH = 0.1
+CROSSOVER_THRESHOLD = 0.5
+
+# Simulation constants
+DEFAULT_FPS = 60
+DEFAULT_GENERATION_TIME = 30
+SURVIVAL_POINTS_PER_SECOND = 100
+PIPE_PASS_BONUS = 1000
+
+# Constants to normalize NN inputs
+Y_POSITION_NORM = 600.0
+VELOCITY_NORM = 400.0
+DISTANCE_NORM = 800.0
+GAP_RELATIVE_NORM = 300.0
+
+# Visualization constants
+GENERATION_DISPLAY_INTERVAL = 5
+
 class FastFlappySimulation:
-    # BIG TODO: Change magic numbers
-    def __init__(self, population_size=2000):
+    def __init__(self, population_size=DEFAULT_POPULATION_SIZE):
         self.population_size = population_size
-        self.width = 800
-        self.height = 600
+        self.width = SCREEN_WIDTH
+        self.height = SCREEN_HEIGHT
         
         # Vectorized bird states: [y_pos, y_velocity, fitness, alive]
         self.birds = np.zeros((population_size, 4))
-        self.birds[:, 0] = self.height // 2  # Initial y position, we don't care about x position as it's constant
+        self.birds[:, 0] = BIRD_INITIAL_Y  # Initial y position, we don't care about x position as it's constant
         self.birds[:, 3] = 1  # All alive initially
 
         
-        self.gravity = 800
-        self.flap_strength = -300
-        self.bird_width = 30
-        self.bird_height = 30
-        self.bird_x = 100
+        self.gravity = GRAVITY
+        self.flap_strength = FLAP_STRENGTH
+        self.bird_width = BIRD_WIDTH
+        self.bird_height = BIRD_HEIGHT
+        self.bird_x = BIRD_X_POSITION
 
         self.pipes = []  # List of [x, gap_y, gap_height, passed]
-        self.pipe_speed = 200
-        self.pipe_width = 60
-        self.pipe_gap_height = 150
+        self.pipe_speed = PIPE_SPEED
+        self.pipe_width = PIPE_WIDTH
+        self.pipe_gap_height = PIPE_GAP_HEIGHT
         
         # Neural networks for each bird (simplified)
         self.networks = self.create_population_networks()
@@ -41,12 +90,12 @@ class FastFlappySimulation:
         networks = []
 
         for _ in range(self.population_size):
-            w1 = np.random.randn(4, 8)
-            w2 = np.random.randn(8, 16)
-            w3 = np.random.randn(16, 1)
-            b1 = np.random.randn(8)
-            b2 = np.random.randn(16)
-            b3 = np.random.randn(1)
+            w1 = np.random.randn(NN_INPUT_SIZE, NN_HIDDEN1_SIZE)
+            w2 = np.random.randn(NN_HIDDEN1_SIZE, NN_HIDDEN2_SIZE)
+            w3 = np.random.randn(NN_HIDDEN2_SIZE, NN_OUTPUT_SIZE)
+            b1 = np.random.randn(NN_HIDDEN1_SIZE)
+            b2 = np.random.randn(NN_HIDDEN2_SIZE)
+            b3 = np.random.randn(NN_OUTPUT_SIZE)
             networks.append((w1, b1, w2, b2, w3, b3))
         return networks
 
@@ -56,12 +105,12 @@ class FastFlappySimulation:
         h2 = np.maximum(0, h1 @ w2 + b2) # relu
 
         output = 1 / (1 + np.exp(-(h2 @ w3 + b3)))  # Sigmoid
-        return output[0] > 0.5
+        return output[0] > CROSSOVER_THRESHOLD
 
     def get_inputs_for_bird(self, bird_idx):
         """Get inputs for a specific bird and normalizes them"""
         if self.birds[bird_idx, 3] == 0:  # Bird is dead
-            return np.zeros(4)
+            return np.zeros(NN_INPUT_SIZE)
         
         y_pos = self.birds[bird_idx, 0]
         y_vel = self.birds[bird_idx, 1]
@@ -78,13 +127,22 @@ class FastFlappySimulation:
                     min_distance = distance
                     nearest_pipe = pipe
         
-        pipe_x, gap_y, gap_height, passed = nearest_pipe # Assume there will always be a next pipe
+        if nearest_pipe is None:
+            # No pipes available, return default inputs
+            return np.array([
+                y_pos / Y_POSITION_NORM,
+                y_vel / VELOCITY_NORM,
+                1.0,  # Max distance
+                0.0   # No gap to consider
+            ])
+        
+        pipe_x, gap_y, gap_height, passed = nearest_pipe
         
         return np.array([
-            y_pos / 600.0,  # Normalized y position
-            y_vel / 400.0,  # Normalized velocity  
-            (pipe_x - self.bird_x) / 800.0,  # Distance to pipe
-            (gap_y + gap_height/2 - y_pos) / 300.0  # Gap center relative to bird, normalized too
+            y_pos / Y_POSITION_NORM,  # Normalized y position
+            y_vel / VELOCITY_NORM,  # Normalized velocity  
+            (pipe_x - self.bird_x) / DISTANCE_NORM,  # Distance to pipe
+            (gap_y + gap_height/2 - y_pos) / GAP_RELATIVE_NORM  # Gap center relative to bird, normalized too
         ])
     
     def update(self, dt):
@@ -108,7 +166,7 @@ class FastFlappySimulation:
         self.birds[alive_mask, 0] += self.birds[alive_mask, 1] * dt # Position
         
         # Update fitness (time survived + distance)
-        self.birds[alive_mask, 2] += dt * 100  # Base survival points
+        self.birds[alive_mask, 2] += dt * SURVIVAL_POINTS_PER_SECOND  # Base survival points
         
         # Collision detection
         for i in range(self.population_size):
@@ -123,7 +181,7 @@ class FastFlappySimulation:
                 continue
             
             # Pipe collision
-            bird_x = 100
+            bird_x = BIRD_X_POSITION
             
             for pipe in self.pipes:
                 pipe_x, gap_y, gap_height, passed = pipe
@@ -138,7 +196,7 @@ class FastFlappySimulation:
                     
                     # Bird passed pipe
                     elif not passed and bird_x > pipe_x + self.pipe_width:
-                        self.birds[i, 2] += 1000  # Bonus for passing pipe
+                        self.birds[i, 2] += PIPE_PASS_BONUS  # Bonus for passing pipe
                         pipe[3] = True  # Mark pipe as passed
         
         # Update pipes
@@ -152,28 +210,28 @@ class FastFlappySimulation:
             self.pipes.pop(i)
         
         # Spawn new pipes
-        if len(self.pipes) == 0 or self.pipes[-1][0] < self.width - 300:
-            gap_y = random.randint(100, self.height - 250)
+        if len(self.pipes) == 0 or self.pipes[-1][0] < self.width - PIPE_SPAWN_DISTANCE:
+            gap_y = random.randint(PIPE_MIN_GAP_Y, PIPE_MAX_GAP_Y)
             self.pipes.append([self.width, gap_y, self.pipe_gap_height, False])
         
         self.time += dt
         return True
     
-    def run_generation(self, max_time=30):
+    def run_generation(self, max_time=DEFAULT_GENERATION_TIME):
         """Run one full generation"""
         self.time = 0
         
         # Reset birds
-        self.birds[:, 0] = self.height // 2  # Reset positions
+        self.birds[:, 0] = BIRD_INITIAL_Y  # Reset positions
         self.birds[:, 1] = 0  # Reset velocities
         self.birds[:, 2] = 0  # Reset fitness
         self.birds[:, 3] = 1  # All alive
         
         # Reset pipes
-        self.pipes = [[self.width, self.height//2, self.pipe_gap_height, False]]
+        self.pipes = [[self.width, BIRD_INITIAL_Y, self.pipe_gap_height, False]]
         
         # Run simulation
-        dt = 1/60  # Assume constant 60 FPS to emulate visualizer mechanics
+        dt = 1/DEFAULT_FPS  # Assume constant 60 FPS to emulate visualizer mechanics
         while self.time < max_time:
             if not self.update(dt):  # All birds dead
                 break
@@ -183,17 +241,17 @@ class FastFlappySimulation:
     def evolve(self):
         """Create next generation through evolution"""
         # Sort birds by fitness
-        fitness_indices = np.argsort(self.birds[:, 2])[::-1]  # Descending order
+        fitness_indices = np.argsort(self.birds[:, 2])[::-1]  # Descending order, most fit to the end
         
-        # Select top 20% as parents
-        elite_size = max(1, self.population_size // 5)
+        # Select top percentage as parents
+        elite_size = max(1, int(self.population_size * ELITE_PERCENTAGE))
         elite_indices = fitness_indices[:elite_size]
         
         # Create new networks
         new_networks = []
         
-        # Keep best performers
-        for i in range(min(10, elite_size)):
+        # Keep best performers as they are
+        for i in range(min(ELITE_SURVIVORS, elite_size)):
             new_networks.append(self.networks[elite_indices[i]])
         
         # Create rest through crossover and mutation
@@ -210,19 +268,19 @@ class FastFlappySimulation:
         self.networks = new_networks
         self.generation += 1
     
-    def crossover_networks(self, parent1, parent2, mutation_rate=0.1):
+    def crossover_networks(self, parent1, parent2, mutation_rate=MUTATION_RATE):
         """Create child network from two parents"""
         """This method is terribly and of course the whole manual building of NNs does NOT escalate at all"""
         w1_p1, b1_p1, w2_p1, b2_p1, w3_p1, b3_p1 = parent1
         w1_p2, b1_p2, w2_p2, b2_p2, w3_p2, b3_p2 = parent2
         
         # Crossover
-        mask1 = np.random.rand(*w1_p1.shape) > 0.5
-        mask2 = np.random.rand(*w2_p1.shape) > 0.5
-        mask3 = np.random.rand(*w3_p1.shape) > 0.5
-        mask_b1 = np.random.rand(*b1_p1.shape) > 0.5
-        mask_b2 = np.random.rand(*b2_p1.shape) > 0.5
-        mask_b3 = np.random.rand(*b3_p1.shape) > 0.5
+        mask1 = np.random.rand(*w1_p1.shape) > CROSSOVER_THRESHOLD
+        mask2 = np.random.rand(*w2_p1.shape) > CROSSOVER_THRESHOLD
+        mask3 = np.random.rand(*w3_p1.shape) > CROSSOVER_THRESHOLD
+        mask_b1 = np.random.rand(*b1_p1.shape) > CROSSOVER_THRESHOLD
+        mask_b2 = np.random.rand(*b2_p1.shape) > CROSSOVER_THRESHOLD
+        mask_b3 = np.random.rand(*b3_p1.shape) > CROSSOVER_THRESHOLD
         
         
         w1_child = np.where(mask1, w1_p1, w1_p2)
@@ -233,7 +291,7 @@ class FastFlappySimulation:
         b3_child = np.where(mask_b3, b3_p1, b3_p2)
         
         # Mutation
-        mutation_strength = 0.1
+        mutation_strength = MUTATION_STRENGTH
         w1_child += (np.random.rand(*w1_child.shape) < mutation_rate) * np.random.randn(*w1_child.shape) * mutation_strength
         w2_child += (np.random.rand(*w2_child.shape) < mutation_rate) * np.random.randn(*w2_child.shape) * mutation_strength
         w3_child += (np.random.rand(*w3_child.shape) < mutation_rate) * np.random.randn(*w3_child.shape) * mutation_strength
@@ -248,19 +306,19 @@ class GameVisualizer:
     """Pygame visualizer that can show the best bird from simulation"""
     def __init__(self):
         pygame.init()
-        self.width = 800
-        self.height = 600
+        self.width = SCREEN_WIDTH
+        self.height = SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Flappy Bird Best AI playing")
         self.clock = pygame.time.Clock()
         
         # Single bird to visualize
-        self.bird_y = self.height // 2
+        self.bird_y = BIRD_INITIAL_Y
         self.bird_vel = 0
-        self.bird_x = 100
+        self.bird_x = BIRD_X_POSITION
         self.pipes = []
-        self.pipe_speed = 200
-        self.pipe_width = 60
+        self.pipe_speed = PIPE_SPEED
+        self.pipe_width = PIPE_WIDTH
 
         
         # Best network from training
@@ -274,7 +332,7 @@ class GameVisualizer:
         h1 = np.maximum(0, inputs @ w1 + b1)
         h2 = np.maximum(0, h1 @ w2 + b2)
         output = 1 / (1 + np.exp(-(h2 @ w3 + b3)))
-        return output[0] > 0.5
+        return output[0] > CROSSOVER_THRESHOLD
     
     def run_visualization(self):
         """Run pygame visualization of the best bird"""
@@ -284,72 +342,72 @@ class GameVisualizer:
         
         running = True
         # Initialize with one pipe, not great. Maybe TODO: for change
-        self.pipes = [[self.width, self.height//2, 150, False]]
+        self.pipes = [[self.width, BIRD_INITIAL_Y, PIPE_GAP_HEIGHT, False]]
         
         while running:
-            dt = self.clock.tick(60) / 1000.0
+            dt = self.clock.tick(DEFAULT_FPS) / 1000.0
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
-                        self.bird_y = self.height // 2
+                        self.bird_y = BIRD_INITIAL_Y
                         self.bird_vel = 0
-                        self.pipes = [[self.width, self.height//2, 150, False]]
+                        self.pipes = [[self.width, BIRD_INITIAL_Y, PIPE_GAP_HEIGHT, False]]
             
             # AI decision
             if self.pipes:
                 # Minimum distance considering only the pipes that have fully passed the bird.
                 nearest_pipe = min((p for p in self.pipes if p[0] + self.pipe_width >= self.bird_x), 
-                                 key=lambda p: p[0] - 100, default=None)
+                                 key=lambda p: p[0] - self.bird_x, default=None)
                 if nearest_pipe:
                     inputs = np.array([
-                        self.bird_y / 600.0,
-                        self.bird_vel / 400.0,
-                        (nearest_pipe[0] - 100) / 800.0,
-                        (nearest_pipe[1] + 75 - self.bird_y) / 300.0
+                        self.bird_y / Y_POSITION_NORM,
+                        self.bird_vel / VELOCITY_NORM,
+                        (nearest_pipe[0] - BIRD_X_POSITION) / DISTANCE_NORM,
+                        (nearest_pipe[1] + PIPE_GAP_HEIGHT/2 - self.bird_y) / GAP_RELATIVE_NORM
                     ])
                     
                     if self.neural_network_decision(inputs, self.best_network):
-                        self.bird_vel = -300
+                        self.bird_vel = FLAP_STRENGTH
             
-            self.bird_vel += 800 * dt
+            self.bird_vel += GRAVITY * dt
             self.bird_y += self.bird_vel * dt
             
             for pipe in self.pipes:
                 # x direction grows right to left, pipe approach from the left
                 pipe[0] -= self.pipe_speed * dt
             
-            self.pipes = [p for p in self.pipes if p[0] + 60 > 0]
+            self.pipes = [p for p in self.pipes if p[0] + PIPE_WIDTH > 0]
             
             # Spawn pipes
-            if not self.pipes or self.pipes[-1][0] < self.width - 300:
-                gap_y = random.randint(100, self.height - 250)
-                self.pipes.append([self.width, gap_y, 150, False])
+            if not self.pipes or self.pipes[-1][0] < self.width - PIPE_SPAWN_DISTANCE:
+                gap_y = random.randint(PIPE_MIN_GAP_Y, PIPE_MAX_GAP_Y)
+                self.pipes.append([self.width, gap_y, PIPE_GAP_HEIGHT, False])
             
             self.screen.fill(BLUE_SKY)
             
             pygame.draw.rect(self.screen, YELLOW, 
-                           (100, self.bird_y, 30, 30))
+                           (BIRD_X_POSITION, self.bird_y, BIRD_WIDTH, BIRD_HEIGHT))
             
             for pipe in self.pipes:
                 x, gap_y, gap_height, _ = pipe
                 # Top pipe
                 pygame.draw.rect(self.screen, GREEN, 
-                               (x, 0, 60, gap_y))
+                               (x, 0, PIPE_WIDTH, gap_y))
                 # Bottom pipe  
                 pygame.draw.rect(self.screen, GREEN, 
-                               (x, gap_y + gap_height, 60, self.height))
+                               (x, gap_y + gap_height, PIPE_WIDTH, self.height))
                 
             
-            bird_rect = pygame.Rect(100, self.bird_y, 30, 30)
+            bird_rect = pygame.Rect(BIRD_X_POSITION, self.bird_y, BIRD_WIDTH, BIRD_HEIGHT)
 
             # Check for collision with pipes (not good implementation though)
             for pipe in self.pipes:
                 x, gap_y, gap_height, _ = pipe
-                top_rect = pygame.Rect(x, 0, 60, gap_y)
-                bottom_rect = pygame.Rect(x, gap_y + gap_height, 60, self.height)
+                top_rect = pygame.Rect(x, 0, PIPE_WIDTH, gap_y)
+                bottom_rect = pygame.Rect(x, gap_y + gap_height, PIPE_WIDTH, self.height)
                 
                 if bird_rect.colliderect(top_rect) or bird_rect.colliderect(bottom_rect):
                     print("Collision detected in visualizer!")
@@ -359,7 +417,7 @@ class GameVisualizer:
             
 
             # Also check for ground/ceiling collision
-            if self.bird_y <= 0 or self.bird_y + 30 >= self.height:
+            if self.bird_y <= 0 or self.bird_y + BIRD_HEIGHT >= self.height:
                 print("Hit ground/ceiling in visualizer!")
                 running = False
             
@@ -370,13 +428,13 @@ class GameVisualizer:
 
 def main():
     print("Training AI started...")
-    sim = FastFlappySimulation(population_size=2000)
+    sim = FastFlappySimulation(population_size=DEFAULT_POPULATION_SIZE)
     
     best_fitness_history = []
     
     for generation in range(50):
         # Run fast simulation
-        final_states = sim.run_generation(max_time=30)
+        final_states = sim.run_generation(max_time=DEFAULT_GENERATION_TIME)
         
         # Track progress
         best_fitness = np.max(final_states[:, 2])
@@ -385,8 +443,8 @@ def main():
         
         print(f"Gen {generation:3d}: Best={best_fitness:6.1f}, Avg={avg_fitness:6.1f}")
         
-        # Show visualization every 5 generations
-        if generation % 5 == 0:
+        # Show visualization every N generations
+        if generation % GENERATION_DISPLAY_INTERVAL == 0:
             best_bird_idx = np.argmax(final_states[:, 2])
             best_network = sim.networks[best_bird_idx]
             
