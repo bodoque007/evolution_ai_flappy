@@ -246,7 +246,6 @@ class FastFlappySimulation:
 
 class GameVisualizer:
     """Pygame visualizer that can show the best bird from simulation"""
-    
     def __init__(self):
         pygame.init()
         self.width = 800
