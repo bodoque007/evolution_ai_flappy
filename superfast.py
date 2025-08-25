@@ -84,7 +84,7 @@ class FastFlappySimulation:
             y_pos / 600.0,  # Normalized y position
             y_vel / 400.0,  # Normalized velocity  
             (pipe_x - self.bird_x) / 800.0,  # Distance to pipe
-            (gap_y + gap_height/2 - y_pos) / 300.0  # Gap center relative to bird
+            (gap_y + gap_height/2 - y_pos) / 300.0  # Gap center relative to bird, normalized too
         ])
     
     def update(self, dt):
