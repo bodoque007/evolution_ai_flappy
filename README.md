@@ -1,5 +1,7 @@
-This was a very interesting project. I initially approached it with sheer OOP design, having many pipe and bird objects in the game. But when the birds population size was big enough to make the algorithm perform significatively (1000+), the performance drastically worsened. This happened mainly because of Python being interpreted, having dynamic typing, object overhead and heap allocation. Plus, having used Tensorflow initially for such a simple NN that does not even make use of the typical algorithms that come up whenever training a NN such as backpropagation or gradient descent.
-The NN's only functionality was mutating (changing its weights and biases, simple) and holding these values, thus Tensorflow was clearly an overkill.
+This was a very interesting project. I initially approached it with sheer OOP design, having many pipe and bird objects in the game. But when the birds population size was big enough to make the algorithm perform significatively (1000+), the performance drastically worsened. 
+This happened mainly because of Python being interpreted, having dynamic typing, object overhead and heap allocation. 
+Plus, I was using Tensorflow initially, but this was an overkill for such a simple NN that does not even make use of the typical algorithms such as backpropagation or gradient descent.
+The Neural network's only functionality was mutating (changing its weights and biases, simple), holding these values and making the forward pass to "make its choice".
 
 This forced me to (as I didn't want to change to another language) approach it with Data Oriented Design, I thought it was a good opportunity to learn such thing after having heard of it mainly in old school programming.
 
