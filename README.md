@@ -1,5 +1,12 @@
 # Flappy Bird AI Evolution
 
+## How to Run
+
+```bash
+pip install -r requirements.txt
+python flappy_bird_evolution.py
+```
+
 ## Project Overview
 
 This was a very interesting project. I initially approached it with sheer OOP design, having many pipe and bird objects in the game. But when the birds population size was big enough to make the algorithm perform significatively (1000+), the performance drastically worsened.
