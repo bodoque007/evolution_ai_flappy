@@ -10,7 +10,6 @@ class GameVisualizer:
         self.width = SCREEN_WIDTH
         self.height = SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Flappy Bird Best AI playing")
         self.clock = pygame.time.Clock()
         
         # Single bird to visualize
@@ -21,8 +20,8 @@ class GameVisualizer:
         self.pipe_speed = PIPE_SPEED
         self.pipe_width = PIPE_WIDTH
 
-        # Best network from training
         self.best_network = None
+        pygame.display.set_caption("Flappy Bird Best AI playing")
     
     def set_best_network(self, network):
         self.best_network = network

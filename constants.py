@@ -24,7 +24,7 @@ PIPE_MIN_GAP_Y = 100
 PIPE_MAX_GAP_Y = SCREEN_HEIGHT - 250
 
 # Neural network constants
-NN_INPUT_SIZE = 4
+NN_INPUT_SIZE = 4 # Vectorized bird states: [y_pos, y_velocity, fitness, alive]
 NN_HIDDEN1_SIZE = 8
 NN_HIDDEN2_SIZE = 16
 NN_OUTPUT_SIZE = 1
