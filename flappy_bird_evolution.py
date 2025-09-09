@@ -32,6 +32,7 @@ NN_INPUT_SIZE = 4
 NN_HIDDEN1_SIZE = 8
 NN_HIDDEN2_SIZE = 16
 NN_OUTPUT_SIZE = 1
+NN_ARCHITECTURE = [NN_INPUT_SIZE, NN_HIDDEN1_SIZE, NN_HIDDEN2_SIZE, NN_OUTPUT_SIZE]
 
 # Evolution constants
 DEFAULT_POPULATION_SIZE = 2000
@@ -56,6 +57,59 @@ GAP_RELATIVE_NORM = 300.0
 # Visualization constants
 GENERATION_DISPLAY_INTERVAL = 5
 
+class NeuralNetwork:
+    def __init__(self, architecture=None, weights=None, biases=None):
+        if architecture:
+            self.weights = []
+            self.biases = []
+            for i in range(len(architecture) - 1):
+                w = np.random.randn(architecture[i], architecture[i + 1])
+                b = np.random.randn(architecture[i + 1])
+                self.weights.append(w)
+                self.biases.append(b)
+        else:
+            self.weights = weights
+            self.biases = biases
+
+    def predict(self, inputs):
+        # Forward pass through all layers
+        current_input = inputs
+        for i, (w, b) in enumerate(zip(self.weights, self.biases)):
+            z = current_input @ w + b
+            
+            if i < len(self.weights) - 1:  # reLU
+                current_input = np.maximum(0, z)
+            else:  # sigmoid for output layer
+                current_input = 1 / (1 + np.exp(-z))
+        
+        return current_input[0] > CROSSOVER_THRESHOLD
+
+    @classmethod
+    def crossover(cls, parent1, parent2, mutation_rate=MUTATION_RATE):
+        """Create child network from two parents with flexible layer structure"""
+        child_weights = []
+        child_biases = []
+        
+        # Crossover for each layer
+        for w1, w2, b1, b2 in zip(parent1.weights, parent2.weights, parent1.biases, parent2.biases):
+            # Crossover weights
+            w_mask = np.random.rand(*w1.shape) > CROSSOVER_THRESHOLD
+            w_child = np.where(w_mask, w1, w2)
+            
+            # Crossover biases  
+            b_mask = np.random.rand(*b1.shape) > CROSSOVER_THRESHOLD
+            b_child = np.where(b_mask, b1, b2)
+            
+            # Mutate
+            mutation_strength = MUTATION_STRENGTH
+            w_child += (np.random.rand(*w_child.shape) < mutation_rate) * np.random.randn(*w_child.shape) * mutation_strength
+            b_child += (np.random.rand(*b_child.shape) < mutation_rate) * np.random.randn(*b_child.shape) * mutation_strength
+            
+            child_weights.append(w_child)
+            child_biases.append(b_child)
+        
+        return cls(weights=child_weights, biases=child_biases)
+
 class FastFlappySimulation:
     def __init__(self, population_size=DEFAULT_POPULATION_SIZE):
         self.population_size = population_size
@@ -67,7 +121,6 @@ class FastFlappySimulation:
         self.birds[:, 0] = BIRD_INITIAL_Y  # Initial y position, we don't care about x position as it's constant
         self.birds[:, 3] = 1  # All alive initially
 
-        
         self.gravity = GRAVITY
         self.flap_strength = FLAP_STRENGTH
         self.bird_width = BIRD_WIDTH
@@ -79,33 +132,14 @@ class FastFlappySimulation:
         self.pipe_width = PIPE_WIDTH
         self.pipe_gap_height = PIPE_GAP_HEIGHT
         
-        # Neural networks for each bird (simplified)
+        # Neural networks for each bird
         self.networks = self.create_population_networks()
         
         self.time = 0
         self.generation = 1
 
-    
     def create_population_networks(self):
-        networks = []
-
-        for _ in range(self.population_size):
-            w1 = np.random.randn(NN_INPUT_SIZE, NN_HIDDEN1_SIZE)
-            w2 = np.random.randn(NN_HIDDEN1_SIZE, NN_HIDDEN2_SIZE)
-            w3 = np.random.randn(NN_HIDDEN2_SIZE, NN_OUTPUT_SIZE)
-            b1 = np.random.randn(NN_HIDDEN1_SIZE)
-            b2 = np.random.randn(NN_HIDDEN2_SIZE)
-            b3 = np.random.randn(NN_OUTPUT_SIZE)
-            networks.append((w1, b1, w2, b2, w3, b3))
-        return networks
-
-    def neural_network_decision(self, inputs, network):
-        w1, b1, w2, b2, w3, b3 = network
-        h1 = np.maximum(0, inputs @ w1 + b1)  # relu
-        h2 = np.maximum(0, h1 @ w2 + b2) # relu
-
-        output = 1 / (1 + np.exp(-(h2 @ w3 + b3)))  # Sigmoid
-        return output[0] > CROSSOVER_THRESHOLD
+        return [NeuralNetwork(architecture=NN_ARCHITECTURE) for _ in range(self.population_size)]
 
     def get_inputs_for_bird(self, bird_idx):
         """Get inputs for a specific bird and normalizes them"""
@@ -157,7 +191,7 @@ class FastFlappySimulation:
         for i in range(self.population_size):
             if alive_mask[i]:
                 inputs = self.get_inputs_for_bird(i)
-                should_flap = self.neural_network_decision(inputs, self.networks[i])
+                should_flap = self.networks[i].predict(inputs)
                 if should_flap:
                     self.birds[i, 1] = self.flap_strength
         
@@ -174,7 +208,6 @@ class FastFlappySimulation:
                 continue
                 
             bird_y = self.birds[i, 0]
-            
             
             if bird_y <= 0 or bird_y + self.bird_height >= self.height:
                 self.birds[i, 3] = 0  # Kill bird
@@ -259,7 +292,7 @@ class FastFlappySimulation:
             p1_idx = np.random.choice(elite_indices)
             p2_idx = np.random.choice(elite_indices)
             
-            child_network = self.crossover_networks(
+            child_network = NeuralNetwork.crossover(
                 self.networks[p1_idx], 
                 self.networks[p2_idx]
             )
@@ -267,40 +300,6 @@ class FastFlappySimulation:
         
         self.networks = new_networks
         self.generation += 1
-    
-    def crossover_networks(self, parent1, parent2, mutation_rate=MUTATION_RATE):
-        """Create child network from two parents"""
-        """This method is terribly and of course the whole manual building of NNs does NOT escalate at all"""
-        w1_p1, b1_p1, w2_p1, b2_p1, w3_p1, b3_p1 = parent1
-        w1_p2, b1_p2, w2_p2, b2_p2, w3_p2, b3_p2 = parent2
-        
-        # Crossover
-        mask1 = np.random.rand(*w1_p1.shape) > CROSSOVER_THRESHOLD
-        mask2 = np.random.rand(*w2_p1.shape) > CROSSOVER_THRESHOLD
-        mask3 = np.random.rand(*w3_p1.shape) > CROSSOVER_THRESHOLD
-        mask_b1 = np.random.rand(*b1_p1.shape) > CROSSOVER_THRESHOLD
-        mask_b2 = np.random.rand(*b2_p1.shape) > CROSSOVER_THRESHOLD
-        mask_b3 = np.random.rand(*b3_p1.shape) > CROSSOVER_THRESHOLD
-        
-        
-        w1_child = np.where(mask1, w1_p1, w1_p2)
-        w2_child = np.where(mask2, w2_p1, w2_p2)
-        w3_child = np.where(mask3, w3_p1, w3_p2)
-        b1_child = np.where(mask_b1, b1_p1, b1_p2)
-        b2_child = np.where(mask_b2, b2_p1, b2_p2)
-        b3_child = np.where(mask_b3, b3_p1, b3_p2)
-        
-        # Mutation
-        mutation_strength = MUTATION_STRENGTH
-        w1_child += (np.random.rand(*w1_child.shape) < mutation_rate) * np.random.randn(*w1_child.shape) * mutation_strength
-        w2_child += (np.random.rand(*w2_child.shape) < mutation_rate) * np.random.randn(*w2_child.shape) * mutation_strength
-        w3_child += (np.random.rand(*w3_child.shape) < mutation_rate) * np.random.randn(*w3_child.shape) * mutation_strength
-        b1_child += (np.random.rand(*b1_child.shape) < mutation_rate) * np.random.randn(*b1_child.shape) * mutation_strength
-        b2_child += (np.random.rand(*b2_child.shape) < mutation_rate) * np.random.randn(*b2_child.shape) * mutation_strength
-        b3_child += (np.random.rand(*b3_child.shape) < mutation_rate) * np.random.randn(*b3_child.shape) * mutation_strength
-        
-        return (w1_child, b1_child, w2_child, b2_child, w3_child, b3_child)
-
 
 class GameVisualizer:
     """Pygame visualizer that can show the best bird from simulation"""
@@ -320,19 +319,11 @@ class GameVisualizer:
         self.pipe_speed = PIPE_SPEED
         self.pipe_width = PIPE_WIDTH
 
-        
         # Best network from training
         self.best_network = None
     
     def set_best_network(self, network):
         self.best_network = network
-    
-    def neural_network_decision(self, inputs, network):
-        w1, b1, w2, b2, w3, b3 = network
-        h1 = np.maximum(0, inputs @ w1 + b1)
-        h2 = np.maximum(0, h1 @ w2 + b2)
-        output = 1 / (1 + np.exp(-(h2 @ w3 + b3)))
-        return output[0] > CROSSOVER_THRESHOLD
     
     def run_visualization(self):
         """Run pygame visualization of the best bird"""
@@ -369,7 +360,7 @@ class GameVisualizer:
                         (nearest_pipe[1] + PIPE_GAP_HEIGHT/2 - self.bird_y) / GAP_RELATIVE_NORM
                     ])
                     
-                    if self.neural_network_decision(inputs, self.best_network):
+                    if self.best_network.predict(inputs):
                         self.bird_vel = FLAP_STRENGTH
             
             self.bird_vel += GRAVITY * dt
@@ -400,7 +391,6 @@ class GameVisualizer:
                 pygame.draw.rect(self.screen, GREEN, 
                                (x, gap_y + gap_height, PIPE_WIDTH, self.height))
                 
-            
             bird_rect = pygame.Rect(BIRD_X_POSITION, self.bird_y, BIRD_WIDTH, BIRD_HEIGHT)
 
             # Check for collision with pipes (not good implementation though)
@@ -414,8 +404,6 @@ class GameVisualizer:
                     running = False
                     break
             
-            
-
             # Also check for ground/ceiling collision
             if self.bird_y <= 0 or self.bird_y + BIRD_HEIGHT >= self.height:
                 print("Hit ground/ceiling in visualizer!")
@@ -425,7 +413,6 @@ class GameVisualizer:
         
         pygame.quit()
 
-
 def main():
     print("Training AI started...")
     sim = FastFlappySimulation(population_size=DEFAULT_POPULATION_SIZE)
@@ -433,7 +420,6 @@ def main():
     best_fitness_history = []
     
     for generation in range(50):
-        # Run fast simulation
         final_states = sim.run_generation(max_time=DEFAULT_GENERATION_TIME)
         
         # Track progress
