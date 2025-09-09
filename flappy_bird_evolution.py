@@ -260,8 +260,9 @@ class FastFlappySimulation:
         self.birds[:, 2] = 0  # Reset fitness
         self.birds[:, 3] = 1  # All alive
         
-        # Reset pipes
-        self.pipes = [[self.width, BIRD_INITIAL_Y, self.pipe_gap_height, False]]
+        # Reset pipes and randomizes first pipe TODO: This is still kind of bad, but I am focusing on more important matters lol
+        initial_gap_y = random.randint(PIPE_MIN_GAP_Y, PIPE_MAX_GAP_Y)
+        self.pipes = [[self.width, initial_gap_y, self.pipe_gap_height, False]]
         
         # Run simulation
         dt = 1/DEFAULT_FPS  # Assume constant 60 FPS to emulate visualizer mechanics
